@@ -64,6 +64,13 @@ where
 		transaction_index: u32,
 		at: Option<HashOf<Block>>,
 	) -> RpcResult<DataProof>;
+
+	#[method(name = "kate_queryInclusionProof")]
+	async fn query_inclusion_proof(
+		&self,
+		transaction_index: u32,
+		at: Option<HashOf<Block>>,
+	) -> RpcResult<DataProof>;
 }
 
 #[cfg(feature = "metrics")]
@@ -455,6 +462,25 @@ where
 		KateRpcMetrics::observe_query_data_proof_execution_time(execution_start.elapsed());
 
 		data_proof
+	}
+
+	async fn query_inclusion_proof(
+		&self,
+		transaction_index: u32,
+		at: Option<HashOf<Block>>,
+	) -> RpcResult<DataProof> {
+		let block = self.get_signed_block(at)?.block;
+
+		let merkle_proof = submitted_data::inclusion_proof(block.extrinsics(), transaction_index)
+			.ok_or_else(|| {
+			internal_err!(
+				"Failed to generate inclusion proof for transaction {transaction_index} at block {at:?}",
+			)
+		})?;
+
+		DataProof::try_from(&merkle_proof).map_err(|error| {
+			internal_err!("Failed to create inclusion proof from merkle proof: {error:?}")
+		})
 	}
 }
 
